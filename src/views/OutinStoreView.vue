@@ -106,6 +106,7 @@
           slidesPerGroup: 3,
           spaceBetween: 0,
           loop: true,
+          speed: 1000,
           autoplay: {
             delay: 15000,
             disableOnInteraction: false
