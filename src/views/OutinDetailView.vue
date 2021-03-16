@@ -11,8 +11,10 @@
         <div class="text">件</div>
       </div>
     </div>
+    <div class="skewbox">
+      <img v-if="getPicUrl" :src="getPicUrl" />
+    </div>
     <div class="picbox">
-<!--      <img :src="">-->
     </div>
     <div class="tablebox">
       <ul class="table-title">
@@ -23,19 +25,24 @@
           <li class="size">尺码</li>
       </ul>
       <div class="table-data">
-        <div class="scroll" :style="{marginTop: stockList.length > 15 ? '-55px' : 0}">
-          <ul class="row"
-              :class="[rowClasses, {deep: item.deep}]"
-              v-for="(item, index) in viewlist"
-              :key="index"
-              @animationend="onSlidingEnd">
-            <li class="index">{{item.index}}</li>
-            <li class="code">{{item.colorDetail}}</li>
-            <li class="style">{{item.factory_desc}}</li>
-            <li class="color">{{item.ColorMain}}</li>
-            <li class="size">{{item.size}}</li>
-          </ul>
-        </div>
+        <swiper class="swiper"
+                ref="mySwiper"
+                :options="swiperOption">
+          <div class="swiper-slide"
+               v-for="(rows, index) in viewlist"
+               :key="index">
+            <ul class="row"
+                v-for="(row, idx) in rows"
+                :key="idx">
+              <li class="index">{{row.index}}</li>
+              <li class="code">{{row.colorDetail}}</li>
+              <li class="style">{{row.factory_desc}}</li>
+              <li class="color">{{row.ColorMain}}</li>
+              <li class="size">{{row.size}}</li>
+            </ul>
+          </div>
+        </swiper>
+
       </div>
     </div>
     <finish-window ref="finish">
@@ -46,92 +53,61 @@
 </template>
 
 <script>
+  import { Swiper } from 'vue-awesome-swiper'
+  import 'swiper/css/swiper.css'
   import {mapState} from 'vuex'
   import FinishWindow from './window/FinishWindow'
   import ErrorWindow from './window/ErrorWindow'
+  import {getImgUrl} from '../assets/js/utils'
+
   export default {
     name: 'outin-detail-view',
     components: {
       FinishWindow,
-      ErrorWindow
+      ErrorWindow,
+      Swiper
     },
     computed: {
       ...mapState([
         'stockList',
         'stoTypeName'
       ]),
+      getPicUrl() {
+        return this.stockList.length > 0 ? getImgUrl(this.stockList[0].PicName) : ''
+      },
       viewlist() {
-        if (this.stockList.length <= 15) {
-          return this.stockList.concat(Array.from({length: 15 - this.stockList.length}, () => ({}))).map((item, idx) => ({
-            deep: idx % 2,
-            index: Object.keys(item).length > 0 ? idx + 1 : null,
-            ...item
-          }))
-        } else if (this.stockList.length > 15) {
-          let list = this.stockList.slice()
-          if (this.stockList.length % 2 !== 0) {
-            list.push({})
-          }
-          list = list.map((item, idx) => ({
-            ...item,
-            index: Object.keys(item).length > 0 ? idx + 1 : null
-          }))
-          return list.concat(list).map((item, idx) => ({
-            deep: idx % 2,
-            ...item
-          })).slice(this.currentRow)
-        } else {
-          return []
-        }
+        let stockList = this.stockList.map((data, idx) => ({
+          index: idx + 1,
+          ...data
+        }))
+        return Array.from({length: Math.ceil(stockList.length / 15)}, () => ({})).map((_, index) => {
+          let list = stockList.slice(index * 15, (index + 1) * 15)
+          return list.length === 15 ? list : list.concat(Array.from({length: 15 - list.length}, () => ({})))
+        })
       },
-      rowClasses() {
+      swiperOption() {
         return {
-          'kira-slide-in-up': this.isSliding,
+          loop: true,
+          speed: 1000,
+          autoplay: this.viewlist.length > 1 ? {
+            delay: 10000,
+            disableOnInteraction: false
+          } : false
         }
       },
-      rowCount() {
-        return this.stockList.length % 2 === 0 ? this.stockList.length : this.stockList.length + 1
-      }
-    },
-    data() {
-      return {
-        isSliding: false,
-        slidingId: 0,
-        currentRow: 0
+      swiper() {
+        return this.$refs.mySwiper.swiperInstance
       }
     },
     methods: {
-      onSlidingEnd() {
-        this.isSliding = false
-      },
-      startSliding() {
-        if (!this.slidingId) {
-          this.slidingId = window.setInterval(() => {
-            this.currentRow = (this.currentRow + 1) % this.rowCount
-            this.isSliding = true
-          }, 2000)
-        }
-      },
-      stopSliding() {
-        if (this.slidingId) {
-          window.clearInterval(this.slidingId)
-        }
-      }
-    },
-    mounted() {
-    },
-    destroyed() {
-      this.stopSliding()
     },
     watch: {
+      'viewlist'() {
+        this.viewlist.length > 1 && this.swiper.autoplay.start()
+      },
       stockList: {
         immediate: true,
         handler: function () {
-          if (this.stockList.length > 15) {
-            this.startSliding()
-          } else {
-            this.stopSliding()
-          }
           this.$store.commit('SET_STOTYPENAME', this.stockList.length > 0 && this.stockList[0].StoType === 1 ? '入库' : '出库')
         }
       }
@@ -140,7 +116,6 @@
 </script>
 
 <style lang="stylus" rel="stylesheet/stylus" scoped>
-@import '../assets/stylus/scroll.styl'
 .wrapper
   position: absolute
   width: 1920px
@@ -214,6 +189,22 @@
     height: 650px
     background-image: url("../assets/img/picbox.png")
     background-size: cover
+    overflow: hidden
+    z-index: 20
+  .skewbox
+    position: absolute
+    z-index: 10
+    top: 269px
+    left: -100px
+    width: 950px
+    height: 950px
+    overflow: hidden
+    transform: rotate(45deg)
+    img
+      width: 640px
+      height: 640px
+      margin: 90px 0 0 150px
+      transform: rotate(-45deg)
   .tablebox
     position: absolute
     top: 91px
@@ -238,7 +229,7 @@
         height: 55px
         align-items: center
         font-size: 22px
-        &.deep
+        &:nth-of-type(2n + 1)
           background: rgba(14, 95, 183, .15)
     .index
       flex: 0 0 132px
